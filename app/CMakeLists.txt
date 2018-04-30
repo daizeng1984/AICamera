@@ -66,6 +66,10 @@ set_target_properties(
     ${CMAKE_CURRENT_LIST_DIR}/src/main/jniLibs/${ANDROID_ABI}/libCAFFE2_NNPACK.a
     )
 
+set(OpenCV_DIR "../opencv/sdk/native/jni")
+find_package(OpenCV REQUIRED)
+message(STATUS "OpenCV libraries: ${OpenCV_LIBS}")
+
 include_directories( src/main/cpp )
 
 find_library(
@@ -83,5 +87,6 @@ target_link_libraries(
                        glog
                        protobuf
                        cpufeatures
+                       ${OpenCV_LIBS}
                        ${log-lib}
                        ${android-lib})

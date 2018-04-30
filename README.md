@@ -7,6 +7,8 @@ AICamera is a demo app that was displayed at Facebook's F8 event.  The previous 
 ### Download
 
     git clone https://github.com/caffe2/AICamera.git
+    
+    download https://sourceforge.net/projects/opencvlibrary/files/opencv-android/2.4.13/opencv-2.4.13.6-android-sdk.zip/download and put unzipped sdk to rootProject/opencv 
 
 ### Build
 
