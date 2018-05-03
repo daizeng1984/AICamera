@@ -5,14 +5,14 @@ AICamera is a demo app that was displayed at Facebook's F8 event.  The previous 
 ![example](https://thumbs.gfycat.com/FlimsyInbornIndianabat-size_restricted.gif)
 
 ### Download
-
-    git clone https://github.com/caffe2/AICamera.git
-    
-    download https://sourceforge.net/projects/opencvlibrary/files/opencv-android/2.4.13/opencv-2.4.13.6-android-sdk.zip/download and put unzipped sdk to rootProject/opencv 
+Download opencv sdk from https://opencv.org/releases.html
+e.g. https://sourceforge.net/projects/opencvlibrary/files/opencv-android/2.4.13/opencv-2.4.13.6-android-sdk.zip/download and unzip it to projectRoot and rename folder name as opencv
 
 ### Build
 
-Click the green play button in Android Studio 3.0.1 and everything should build :)
+gradle build
+
+gradle installDebug
 
 ### Tests
 

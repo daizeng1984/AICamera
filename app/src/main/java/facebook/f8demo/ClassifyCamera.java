@@ -73,7 +73,7 @@ public class ClassifyCamera extends AppCompatActivity {
         System.loadLibrary("native-lib");
     }
 
-    public native String classificationFromCaffe2(int h, int w, byte[] Y, byte[] U, byte[] V,
+    public native String classificationFromCaffe2(int h, int w, byte[] data,
                                                   int rowStride, int pixelStride, boolean r_hwc);
     public native void initCaffe2(AssetManager mgr);
     private class SetUpNeuralNetwork extends AsyncTask<Void, Void, Void> {
@@ -213,23 +213,106 @@ public class ClassifyCamera extends AppCompatActivity {
                             return;
                         }
                         processing = true;
+
+                        // This won't be 227x227, device simply has its own support size: mCamera.getParameters().getSupportedPreviewSizes();
                         int w = image.getWidth();
                         int h = image.getHeight();
-                        ByteBuffer Ybuffer = image.getPlanes()[0].getBuffer();
-                        ByteBuffer Ubuffer = image.getPlanes()[1].getBuffer();
-                        ByteBuffer Vbuffer = image.getPlanes()[2].getBuffer();
-                        // TODO: use these for proper image processing on different formats.
-                        int rowStride = image.getPlanes()[1].getRowStride();
-                        int pixelStride = image.getPlanes()[1].getPixelStride();
-                        byte[] Y = new byte[Ybuffer.capacity()];
-                        byte[] U = new byte[Ubuffer.capacity()];
-                        byte[] V = new byte[Vbuffer.capacity()];
-                        Ybuffer.get(Y);
-                        Ubuffer.get(U);
-                        Vbuffer.get(V);
 
-                        predictedClass = classificationFromCaffe2(h, w, Y, U, V,
-                                rowStride, pixelStride, run_HWC);
+                        Image.Plane yPlane = image.getPlanes()[0];
+                        Image.Plane uPlane = image.getPlanes()[1];
+                        Image.Plane vPlane = image.getPlanes()[2];
+
+                        // This is boundary for ByteBuffer
+                        int ySize = yPlane.getBuffer().remaining();
+                        int uSize = uPlane.getBuffer().remaining();
+                        int vSize = vPlane.getBuffer().remaining();
+
+                        byte[] data = new byte[w*h + ((w*h)/2)];
+
+                        // For some details about YUV_420_888 and YUV_420SP (NV21)
+                        // https://en.wikipedia.org/wiki/YUV#Y%E2%80%B2UV420sp_(NV21)_to_RGB_conversion_(Android)
+                        // Y PLANE
+                        // https://developer.android.com/reference/android/graphics/ImageFormat.html#YUV_420_888 
+                        // The Y-plane is guaranteed not to be interleaved with the U/V planes (in particular, pixel stride is always 1 in yPlane.getPixelStride()).
+                        // Carefully handle rowstride for y Plane (TODO: like uv, do this when necessary rowStride != w)
+                        ByteBuffer yb = yPlane.getBuffer();
+                        int yPixelStride = yPlane.getPixelStride();
+                        int yRowStride = yPlane.getRowStride();
+                        
+                        Log.i(TAG,">>>>>>>>>>>>>> image format: " +image.getFormat());
+                        Image.Plane[] planes = image.getPlanes();
+                        for (int i = 0; i < planes.length; i++) {
+                            Log.i(TAG, ">>>>>>>>>>>>>> planeIdx  " + i);
+                            Log.i(TAG, ">>>>>>>>>>>>>> pixelStride  " + planes[i].getPixelStride());
+                            Log.i(TAG, ">>>>>>>>>>>>>> rowStride   " + planes[i].getRowStride());
+                            Log.i(TAG, ">>>>>>>>>>>>>> width  " + image.getWidth());
+                            Log.i(TAG, ">>>>>>>>>>>>>> height  " + image.getHeight());
+                            Log.i(TAG, ">>>>>>>>>>>>>> remain  " + planes[i].getBuffer().remaining());
+                        }
+
+                        int offset = 0;
+                        for (int y = 0; y < h; ++y) {
+                            int length = w;
+                            yb.get(data, offset, length);
+                            offset += length;
+                            // move the pointer
+                            if(yb.remaining() > 0) {
+                                yb.position(yb.position() + yRowStride - length);
+                            }
+                        }
+
+                        // UV PLANE, we need to make pattern
+                        ByteBuffer ub = uPlane.getBuffer();
+                        ByteBuffer vb = vPlane.getBuffer();
+                        int uvPixelStride = uPlane.getPixelStride(); //stride guaranteed to be the same for u and v planes
+                        int uvRowStride = uPlane.getRowStride();
+                        
+                        // We handle it carefully, universally (as we could) and slowly (You can optimize a bit when pixelStride = 1 or 2 or you end up writing your own YUV conversion and cropping like original demo)
+                        // YYYYYYYYYYYYYYYYY;UUUUUUUUUU;VVVVVVVVV
+                        for(int j = 0; j < h/2; ++j) {
+                            int ln = 0;
+                            for(int i = 0; i < w/2; ++i) {
+                                uPlane.getBuffer().get(data, offset, 1);
+                                ++offset;
+                                if(ub.remaining() > 0) {
+                                    ub.position(ub.position() + uvPixelStride - 1);
+                                }
+                            }
+                            if(ub.remaining() > 0) {
+                                ub.position(ub.position() + (uvRowStride - w));
+                            }
+                        }
+                        for(int j = 0; j < h/2; ++j) {
+                            int ln = 0;
+                            for(int i = 0; i < w/2; ++i) {
+                                vPlane.getBuffer().get(data, offset, 1);
+                                ++offset;
+                                if(vb.remaining() > 0) {
+                                    vb.position(vb.position() + uvPixelStride - 1);
+                                }
+                            }
+                            if(vb.remaining() > 0) {
+                                vb.position(vb.position() + (uvRowStride - w));
+                            }
+                        }
+
+                        // if (uvPixelStride == 1) {
+                        //     uPlane.getBuffer().get(data, ySize, uSize);
+                        //     vPlane.getBuffer().get(data, ySize + uSize, vSize);
+                        // }
+                        // else {
+                            // if pixel stride is 2 there is padding between each pixel
+                            // converting it to NV21 by filling the gaps of the v plane with the u values
+                            // vb.get(data, ySize, vSize);
+                            // for (int i = 0; i < uSize; i += 2) {
+                            //     data[ySize + i + 1] = ub.get(i);
+                            // }
+                        // }
+
+                        Log.i(TAG, "<<<<<<<<<<<<<<FINISHED");
+                        // TODO: use these for proper image processing on different formats.
+                        predictedClass = classificationFromCaffe2(h, w, data,
+                                uvRowStride, uvPixelStride, run_HWC);
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
